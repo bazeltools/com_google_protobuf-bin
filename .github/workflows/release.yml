@@ -1,0 +1,77 @@
+name: Release
+on:
+  push:
+    branches:
+      - master
+env:
+  PROTOBUF_SHA: d0bfd5221182da1a7cc280f3337b5e41a89539cf
+jobs:
+  protoc-binaries:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+        include:
+          - os: macos-latest
+            artifact: protoc-macos
+          - os: ubuntu-latest
+            artifact: protoc-linux
+    env:
+      BAZEL_BIN_LOC: "${{ github.workspace }}/.bazel-cache/bazel-bin"
+    steps:
+      - uses: actions/checkout@v2
+      - name: Bazel output cache
+        id: cache-bazel
+        uses: actions/cache@v1
+        with:
+          path: "${{ github.workspace }}/.bazel-cache"
+          key: ${{ runner.os }}-bazel-out-${{ github.run_id}}
+          restore-keys: |
+            ${{ runner.os }}-bazel-out-
+      - name: Configure bazel config for actions
+        run: |
+          echo "build --disk_cache ${{ github.workspace }}/.bazel-cache/disk-cache" >> user.bazelrc
+          echo "build --repository_cache ${{ github.workspace }}/.bazel-cache/repo-cache" >> user.bazelrc
+      - name: Build protoc
+        run: ./ci_scripts/build_protoc.sh
+      - name: Prepare outputs from platform run
+        run: ./ci_scripts/prepare_output.sh ${{ matrix.artifact }} staging-directory
+      - uses: actions/upload-artifact@master
+        with:
+          name: ${{ matrix.artifact }}
+          path: staging-directory
+  make_release:
+    name: Make release
+    needs: protoc-binaries
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Download linux protoc
+        uses: actions/download-artifact@v1
+        with:
+          name: protoc-linux
+          path: downloads
+      - name: Download macos protoc
+        uses: actions/download-artifact@v1
+        with:
+          name: protoc-macos
+          path: downloads
+      - name: show downloads
+        run : ls -R downloads
+      - name: Build make_proto_zip.sh
+        run: ./ci_scripts/make_proto_zip.sh
+      - uses: "marvinpinto/action-automatic-releases@latest"
+        with:
+          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          automatic_release_tag: "v0.1-${{ github.run_number }}"
+          prerelease: false
+          title: "Auto generated release"
+          files: |
+            downloads/protoc-macos
+            downloads/protoc-macos.sha256
+            downloads/protoc-linux
+            downloads/protoc-linux.sha256
+            protobuf.zip
+            protobuf.zip.sha256
+        id: "automatic_releases"
