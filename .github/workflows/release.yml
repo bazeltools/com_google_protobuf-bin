@@ -4,7 +4,7 @@ on:
     branches:
       - master
 env:
-  PROTOBUF_SHA: 655310ca192a6e3a050e0ca0b7084a2968072260
+  PROTOBUF_SHA: 59b3d97f6d7e3ff67bc5d89f030017c60b483549
 jobs:
   protoc-binaries:
     runs-on: ${{ matrix.os }}
